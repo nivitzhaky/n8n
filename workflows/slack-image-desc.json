@@ -4,6 +4,7 @@
         "parameters": {
           "httpMethod": "POST",
           "path": "slack-image-describe",
+          "responseMode": "responseNode",
           "options": {}
         },
         "id": "63d27065-85cb-4387-8486-e0b515a37028",
@@ -38,15 +39,33 @@
       },
       {
         "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { challenge: $json.body.challenge } }}",
           "options": {}
         },
         "id": "e5556881-c6e9-415c-96b3-322e66d8bb77",
         "name": "Return Challenge",
         "type": "n8n-nodes-base.respondToWebhook",
-        "typeVersion": 1,
+        "typeVersion": 1.1,
         "position": [
           -4288,
           -3024
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "noData",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "e3333333-3333-3333-3333-333333333333",
+        "name": "Ack webhook",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          -4288,
+          -2832
         ]
       },
       {
@@ -227,6 +246,17 @@
               "index": 0
             }
           ],
+          [
+            {
+              "node": "Ack webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ack webhook": {
+        "main": [
           [
             {
               "node": "Has File?",
