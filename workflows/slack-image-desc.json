@@ -1,0 +1,300 @@
+{
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "slack-image-describe",
+          "options": {}
+        },
+        "id": "63d27065-85cb-4387-8486-e0b515a37028",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [
+          -4736,
+          -2928
+        ],
+        "webhookId": "83fa6c78-1742-403a-a356-03e001fb8807"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.body.type }}",
+                "value2": "url_verification"
+              }
+            ]
+          }
+        },
+        "id": "c1fbc3cc-a6b2-4776-9f12-a38d48e96b6f",
+        "name": "Is Challenge?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          -4512,
+          -2928
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "e5556881-c6e9-415c-96b3-322e66d8bb77",
+        "name": "Return Challenge",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          -4288,
+          -3024
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Array.isArray($json.body?.event?.files) && $json.body.event.files.length > 0 }}",
+                "operation": "equal",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "0fa8755f-97a8-4bdc-b79b-72ba4e9e210e",
+        "name": "Has File?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          -4288,
+          -2832
+        ]
+      },
+      {
+        "parameters": {
+          "unit": "seconds"
+        },
+        "id": "c21756d1-198b-47a8-b0bf-286aa7ca1ed3",
+        "name": "Wait 1s",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          -4064,
+          -2832
+        ],
+        "webhookId": "f231fa28-f42d-4207-acc0-8f6e820f61c5"
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $node[\"Has File?\"].json.body.event.files[0].url_private_download || $node[\"Has File?\"].json.body.event.files[0].url_private }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer YOUR_BOT_USER_OAUTH_TOKEN"
+              },
+              {
+                "name": "User-Agent",
+                "value": "n8n-slack-image-desc/1.0"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "data"
+              }
+            }
+          }
+        },
+        "id": "3b3e136c-300c-4b53-bb7e-f0fced98b35a",
+        "name": "Download Image",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -3904,
+          -2832
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const bin = items[i].binary?.data;\n  if (!bin) {\n    throw new Error('missing binary data; set Download Image URL to url_private_download and Response format to File');\n  }\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  if (!buf || buf.length === 0) {\n    throw new Error('empty file download');\n  }\n  const probe = buf.slice(0, 64).toString('utf8').trimStart().toLowerCase();\n  if (probe.startsWith('<!doctype') || probe.startsWith('<html')) {\n    throw new Error('download returned HTML not an image; use url_private_download and a valid bot token');\n  }\n  const mime = bin.mimeType || 'application/octet-stream';\n  out.push({\n    json: {\n      ...items[i].json,\n      _vision_mime: mime,\n      _vision_b64: buf.toString('base64'),\n    },\n    binary: items[i].binary,\n  });\n}\nreturn out;"
+        },
+        "id": "54588317-3f7e-4e5c-bd32-b9ae9d64512f",
+        "name": "Prepare vision base64",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -3744,
+          -2832
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.openai.com/v1/chat/completions",
+          "authentication": "none",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer YOUR_OPEN_AI"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ ({ model: 'gpt-4o-mini', max_tokens: 800, messages: [{ role: 'user', content: [{ type: 'text', text: 'Describe this image briefly for Slack. Mention any visible text.' }, { type: 'image_url', image_url: { url: 'data:' + $json._vision_mime + ';base64,' + $json._vision_b64 } }] }] }) }}",
+          "options": {}
+        },
+        "id": "53772f39-4424-47d1-bb72-57dab3cb2654",
+        "name": "OpenAI describe image",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -3552,
+          -2832
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://slack.com/api/chat.postMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer YOUR_BOT_USER_OAUTH_TOKEN"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "channel",
+                "value": "={{ $node[\"Has File?\"].json.body.event.channel }}"
+              },
+              {
+                "name": "text",
+                "value": "={{ $json.choices?.[0]?.message?.content ?? $json.message?.content }}"
+              },
+              {
+                "name": "thread_ts",
+                "value": "={{ $node[\"Has File?\"].json.body.event.ts }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "2b77ca4b-a4bc-420d-b269-d4bd433d61cc",
+        "name": "Post Back to Slack",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -3360,
+          -2832
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Is Challenge?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Challenge?": {
+        "main": [
+          [
+            {
+              "node": "Return Challenge",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Has File?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has File?": {
+        "main": [
+          [
+            {
+              "node": "Wait 1s",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait 1s": {
+        "main": [
+          [
+            {
+              "node": "Download Image",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare vision base64": {
+        "main": [
+          [
+            {
+              "node": "OpenAI describe image",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Download Image": {
+        "main": [
+          [
+            {
+              "node": "Prepare vision base64",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI describe image": {
+        "main": [
+          [
+            {
+              "node": "Post Back to Slack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "pinData": {},
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "3bb2d72eb7d4678d163e20d7c03674f14b3d9f666ed64f27fe59ff180a8b9539"
+    }
+}
